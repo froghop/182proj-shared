@@ -1,10 +1,12 @@
-import tensorflow as tf
+import torch
+import torch.nn as nn
 
-from .utility import positional_encoding
 from .encoder_layer import EncoderLayer
+from .utility import positional_encoding
 
-class Encoder(tf.keras.layers.Layer):
-    
+
+class Encoder(nn.Module):
+    # (batch_size, inp_seq_len, rows, cols, d_model)
     def __init__(self, num_layers, d_model, num_heads, dff, filter_size,
                  image_shape, max_position_encoding):
         super(Encoder, self).__init__()
@@ -12,8 +14,11 @@ class Encoder(tf.keras.layers.Layer):
         self.num_layers = num_layers
         self.d_model = d_model
 
-        self.embedding = tf.keras.layers.Conv2D(d_model, filter_size, 
-                                                padding='same', activation='relu')
+        # self.embedding = nn.Conv2D(1, d_model, filter_size, padding='same', activation='relu')
+        self.embedding = nn.Sequential(
+            nn.Conv2d(1, d_model, filter_size, padding='same'),
+            nn.ReLU(),
+        )
         self.pos_encoding = positional_encoding(max_position_encoding, image_shape, d_model)
         
         self.enc_layers  = [EncoderLayer(d_model, num_heads, dff, filter_size)
@@ -27,7 +32,7 @@ class Encoder(tf.keras.layers.Layer):
         
         # image embedding and position encoding
         x = self.embedding(x)
-        x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
+        x *= torch.sqrt(self.d_model.float32())
         x += self.pos_encoding[:, :seq_len, :, :, :]
         
         for layer in range(self.num_layers):

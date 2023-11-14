@@ -1,18 +1,22 @@
-import tensorflow as tf
+# masha
 import time
+
+import numpy as np
+import torch
+import torch.nn as nn
 
 from .transformer import Transformer
 from .utility import create_look_ahead_mask
+
 
 class VideoPrediction:
     def __init__(self, num_layers, d_model, num_heads, dff, filter_size, image_shape, 
                  pe_input, pe_target, out_channel, loss_function='mse', optimizer='rmsprop'):
         self.transformer = Transformer(num_layers, d_model, num_heads, dff, filter_size,
                                        image_shape, pe_input, pe_target, out_channel)
-        self.loss_object = tf.keras.losses.MeanSquaredError() \
-            if loss_function == 'mse' else tf.keras.losses.BinaryCrossentropy()
-        self.optimizer   = tf.keras.optimizers.RMSprop(learning_rate=0.001, rho=0.9) \
-            if optimizer == 'rmsprop' else tf.keras.optimizers.Adam()
+        self.loss_object = nn.MSELoss() if loss_function == 'mse' else nn.BCELoss()
+        self.optimizer   = torch.optim.RMSprop(self.transformer.parameters(), lr=0.001, rho=0.9) \
+            if optimizer == 'rmsprop' else torch.optim.Adam(self.transformer.parameters())
 
     def loss_function(self, real, pred):
         return self.loss_object(real, pred)
@@ -25,14 +29,15 @@ class VideoPrediction:
         look_ahead_mask = create_look_ahead_mask(tar.shape[1])
         loss = 0
 
-        with tf.GradientTape() as tape:
-            predictions, _ = self.transformer(inp, tar_inp, True, look_ahead_mask)
-            loss = self.loss_function(tar_real, predictions)
+        self.optimizer.zero_grad()
 
-        gradients = tape.gradient(loss, self.transformer.trainable_variables)
-        self.optimizer.apply_gradients(zip(gradients, self.transformer.trainable_variables))
+        predictions, _ = self.transformer(inp, tar_inp, True, look_ahead_mask)
+        loss = self.loss_function(predictions, tar_real)
 
-        return loss
+        loss.backward()
+        self.optimizer.step()
+
+        return loss.item()
 
     def train(self, inp, tar, inp_val, tar_val, epochs, batch_size, epoch_print=5):
 
@@ -72,10 +77,10 @@ class VideoPrediction:
             )
                 
             predict = prediction[:, -1:, :, :, :]        
-            batch_loss += self.loss_function(tar[:, t:t+1], predict)
-                
-            output = tf.concat([output, predict], axis=1)
-            encoder_input = tf.concat([encoder_input, output[:, 0:1]], axis=1)[:, 1:]
+            batch_loss += self.loss_function(predict, tar[:, t:t+1])    
+
+            output = torch.cat([output, predict], dim=1)
+            encoder_input = torch.cat([encoder_input, output[:, 0:1]], dim=1)[:, 1:]
             output = output[:, 1:]
         
         return (batch_loss / int(tar.shape[1]))
@@ -100,7 +105,7 @@ class VideoPrediction:
 
     def predict(self, inp, tar_seq_len):
 
-        inp = tf.expand_dims(inp, 0)
+        inp = torch.unsqueeze(inp, 0)
         image_size = inp.shape[2:]
         
         look_ahead_mask = create_look_ahead_mask(tar_seq_len)
@@ -116,13 +121,14 @@ class VideoPrediction:
             )
                 
             predict = prediction[:, -1:, :, :, :]        
-            output = tf.concat([output, predict], axis=1)
+            output = torch.cat([output, predict], dim=1)
             
-            encoder_input = tf.concat([encoder_input, output[:, 0:1]], axis=1)[:, 1:]
+            encoder_input = torch.cat([encoder_input, output[:, 0:1]], dim=1)[:, 1:]
+
             output = output[:, 1:]
     
             predictions.append(
-                predict.numpy().reshape(
+                predict.detach().numpy().reshape(
                     image_size
                 )
             )

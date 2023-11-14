@@ -1,14 +1,15 @@
-import tensorflow as tf
 import numpy as np
+import torch
+import torch.nn as nn
 
 BASE = 10000
 
 def feed_forward_network(dff, d_model, filter_size):
-
-    return tf.keras.Sequential([
-        tf.keras.layers.Conv2D(dff, filter_size, padding='same', activation='relu'),
-        tf.keras.layers.Conv2D(d_model, filter_size, padding='same')
-    ])
+    return nn.Sequential(
+        nn.Conv2d(in_channels=d_model, out_channels=dff, kernel_size=filter_size, padding=filter_size//2),
+        nn.ReLU(),
+        nn.Conv2d(in_channels=dff, out_channels=d_model, kernel_size=filter_size, padding=filter_size//2)
+    )
 
 def get_angles(pos, i, base_dim, d_model):
     angle_rates = 1 / np.power(BASE, (2 * (i // 2)) / np.float32(d_model))
@@ -17,7 +18,7 @@ def get_angles(pos, i, base_dim, d_model):
         (1, base_dim[0], base_dim[1], d_model)
     )
     return pos * angle_rates
-    
+
 def positional_encoding(position, base_dim, d_model):
     angle_rads = get_angles(
         np.arange(position)[:, np.newaxis, np.newaxis, np.newaxis],
@@ -34,8 +35,7 @@ def positional_encoding(position, base_dim, d_model):
 
     pos_encoding = angle_rads[np.newaxis, ...]
 
-    return tf.cast(pos_encoding, dtype=tf.float32)
+    return torch.tensor(pos_encoding, dtype=torch.float32)
 
 def create_look_ahead_mask(seq_len):
-
-    return tf.ones((1, 1, seq_len), dtype=tf.float32)
+    return torch.ones((1, 1, seq_len), dtype=torch.float32)

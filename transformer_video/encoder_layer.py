@@ -1,9 +1,10 @@
-import tensorflow as tf
+import torch.nn as nn
 
-from .utility import feed_forward_network
 from .multi_head_attention import MultiHeadAttention
+from .utility import feed_forward_network
 
-class EncoderLayer(tf.keras.layers.Layer):
+
+class EncoderLayer(nn.Module):
     
     def __init__(self, d_model, num_heads, dff, filter_size):
         super(EncoderLayer, self).__init__()
@@ -11,8 +12,8 @@ class EncoderLayer(tf.keras.layers.Layer):
         self.mha = MultiHeadAttention(d_model, num_heads, filter_size)
         self.ffn = feed_forward_network(dff, d_model, filter_size)
         
-        self.layernorm1 = tf.keras.layers.BatchNormalization(epsilon=1e-6)
-        self.layernorm2 = tf.keras.layers.BatchNormalization(epsilon=1e-6)
+        self.layernorm1 = nn.BatchNorm2d(d_model, eps=1e-6)
+        self.layernorm2 = nn.BatchNorm2d(d_model, eps=1e-6)
         
         # No dropouts for now
                 
