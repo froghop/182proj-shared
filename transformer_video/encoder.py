@@ -21,8 +21,7 @@ class Encoder(nn.Module):
         )
         self.pos_encoding = positional_encoding(max_position_encoding, image_shape, d_model)
         
-        self.enc_layers  = [EncoderLayer(d_model, num_heads, dff, filter_size)
-                            for _ in range(num_layers)]
+        self.enc_layers  = [EncoderLayer(d_model, num_heads, dff, filter_size) for _ in range(num_layers)]
     
 
     def call(self, x, training, mask):

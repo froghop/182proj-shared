@@ -39,7 +39,6 @@ def scaled_dot_product_attention(q, k, v, mask=None):
 
 
         if mask is not None:
-
             mask = torch.cat(
                 (torch.zeros_like(mask[:, :, :seq + 1]), mask[:, :, :seq_len - seq - 1]),
                 dim=-1
@@ -65,7 +64,7 @@ def scaled_dot_product_attention(q, k, v, mask=None):
 
     return outputs, attention_weights
 
-class MultiHeadAttention(tf.keras.layers.Layer):
+class MultiHeadAttention(nn.Module):
     
     def __init__(self, d_model, num_heads, filter_size):
         super(MultiHeadAttention, self).__init__()

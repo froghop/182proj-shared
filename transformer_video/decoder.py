@@ -1,10 +1,14 @@
-import tensorflow as tf
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
-from .decoder_layer import DecoderLayer
-from .utility import positional_encoding
+from .decoder_layer import \
+    DecoderLayer  # Ensure DecoderLayer is translated to PyTorch
+from .utility import \
+    positional_encoding  # Ensure this is compatible with PyTorch
 
 
-class Decoder(tf.keras.layers.Layer):
+class Decoder(nn.Module):
     
     def __init__(self, num_layers, d_model, num_heads, dff, filter_size,
                  image_shape, max_position_encoding):
@@ -13,33 +17,29 @@ class Decoder(tf.keras.layers.Layer):
         self.num_layers = num_layers
         self.d_model = d_model
 
-        self.embedding = tf.keras.layers.Conv2D(d_model, filter_size, 
-                                                padding='same', activation='relu')
+        # Conv2d in PyTorch doesn't support 'same' padding directly, so we handle it separately
+        self.padding = filter_size // 2  # Assuming filter_size is odd
+        self.embedding = nn.Conv2d(in_channels=image_shape[-1],  # Assuming image_shape includes channels
+                                   out_channels=d_model, 
+                                   kernel_size=filter_size, 
+                                   padding=self.padding)
         self.pos_encoding = positional_encoding(max_position_encoding, image_shape, d_model)
         
-        self.dec_layers  = [DecoderLayer(d_model, num_heads, dff, filter_size)
-                            for _ in range(num_layers)]
+        self.dec_layers = nn.ModuleList([DecoderLayer(d_model, num_heads, dff, filter_size)
+                                         for _ in range(num_layers)])
     
 
-    def call(self, x, enc_output, training, look_ahead_mask):
-
-        # enc_output.shape = (batch_size, input_seq_len, rows, cols, depth)
-        
-        seq_len = x.shape[1]
+    def forward(self, x, enc_output, training, look_ahead_mask):
+        seq_len = x.size(1)
         attention_weights = {}
-        
-        # image embedding and position encoding
-        x = self.embedding(x) # (batch_size, target_seq_len, rows, cols, depth)
-        x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
-        x += self.pos_encoding[:, :seq_len, :, :, :]
-        
-        for layer in range(self.num_layers):
-            x, block1, block2 = self.dec_layers[layer](x, enc_output,
-                                                       training, look_ahead_mask)
 
-            attention_weights[f'decoder_layer{layer+1}_block1'] = block1
-            attention_weights[f'decoder_layer{layer+1}_block2'] = block2
+        x = F.relu(self.embedding(F.pad(x, (self.padding, self.padding, self.padding, self.padding))))
+        x = x * torch.sqrt(torch.tensor(self.d_model, dtype=torch.float32))
+        x = x + self.pos_encoding[:, :seq_len, :, :, :]
 
-        # x.shape = (batch_size, target_seq_len, rows, cols, d_model)
+        for i, layer in enumerate(self.dec_layers):
+            x, block1, block2 = layer(x, enc_output, training, look_ahead_mask)
+            attention_weights[f'decoder_layer{i+1}_block1'] = block1
+            attention_weights[f'decoder_layer{i+1}_block2'] = block2
+
         return x, attention_weights
-
