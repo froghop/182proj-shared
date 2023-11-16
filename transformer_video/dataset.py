@@ -11,24 +11,24 @@ from PIL import Image, ImageDraw, ImageFont
 class Dataset:
     def __init__(
         self,
-        image_height=32,
-        image_width=32,
-        shape_side_length=2,
-        fps=30,
-        speed_mean=3,
-        speed_sd=1,
-        gravity_mean=0,
-        # gravity_mean=np.pi**2,
-        gravity_sd=0,
-        restitution_min=1.00,
-        restitution_max=1.00,
-        direction_min=0,
-        direction_max=np.pi * 2,
-        position_x_mean=None,
-        position_x_sd=2,
-        position_y_mean=None,
-        position_y_sd=2,
-        mass=1.0,
+        image_height: int = 32,
+        image_width: int = 32,
+        shape_side_length: int = 2,
+        fps: int = 30,
+        speed_mean: float = 3.0,
+        speed_sd: float = 1.5,
+        gravity_mean: float = 0,
+        # gravity_mean: float = np.pi**2,
+        gravity_sd: float = 0,
+        restitution_min: float = 1.00,
+        restitution_max: float = 1.00,
+        direction_min: float = 0,
+        direction_max: float = np.pi * 2,
+        position_x_mean: float = None,
+        position_x_sd: float = 2,
+        position_y_mean: float = None,
+        position_y_sd: float = 2,
+        mass: float = 1.0,
         invert_colors=False,
     ):
         self.image_height = image_height
@@ -130,10 +130,9 @@ class Dataset:
         image = Image.new("1", (self.image_width, self.image_height), img_color)
         draw = ImageDraw.Draw(image)
 
-        # Draw the square shape in black|
         x, y = position
-
         if self.shape_side_length == 3:
+            # todo genralize this to sizes >= 3 (if we ever end up going this large)
             draw.rectangle(
                 [
                     x - 1,
@@ -166,13 +165,14 @@ class Dataset:
         """
         Generate a sequence of images of a square object moving in a bounded space.
         """
-        images = []
         position = initial_position
         velocity = (
             initial_speed * np.cos(initial_direction),
             -initial_speed * np.sin(initial_direction),
         )
 
+        images = []
+        positions = []
         for _ in range(sequence_length):
             for _ in range(self.fps):
                 position, velocity = self.simulate_motion(
@@ -188,9 +188,11 @@ class Dataset:
             )
             image = self.draw_frame(adjusted_position)
             images.append(image)
+            positions.append(adjusted_position)
 
         images = np.asarray(images)
-        return images
+        positions = np.asarray(positions)
+        return images, positions
 
     def generate_random_sequence(
         self, sequence_length, initial_speed, gravity, coefficient_of_restitution
@@ -212,7 +214,7 @@ class Dataset:
             print("Y was out of clipped for being out of bounds")
 
         # Generate the sequence
-        sequence = self.generate_sequence(
+        images, positions = self.generate_sequence(
             sequence_length,
             initial_speed,
             initial_direction,
@@ -221,11 +223,11 @@ class Dataset:
             coefficient_of_restitution,
         )
 
-        return sequence
+        return images, positions
 
     def query(
         self,
-        samples=3,
+        sample_cnt=3,
         sequence_length=10,
         as_tensor=True,
         seed=None,
@@ -239,20 +241,21 @@ class Dataset:
             self.restitution_min, self.restitution_max
         )
 
-        seqs = []
-        for _ in range(samples):
-            seq = self.generate_random_sequence(
+        sample_imgs = []
+        sample_xys = []
+        for _ in range(sample_cnt):
+            images, positions = self.generate_random_sequence(
                 sequence_length, initial_speed, gravity, coefficient_of_restitution
             )
-            seq = np.asarray(seq)
+            # seq = np.asarray(seq)
             if as_tensor:
-                seq = torch.from_numpy(seq)
-                # seq = ToTensor()(seq)
+                images = torch.from_numpy(images)
 
-            seqs.append(seq)
+            sample_imgs.append(images)
+            sample_xys.append(positions)
 
         out = dict(
-            sequences=seqs,
+            samples=[sample_imgs, sample_xys],
             speed=initial_speed,
             gravity=gravity,
             restitution=coefficient_of_restitution,
