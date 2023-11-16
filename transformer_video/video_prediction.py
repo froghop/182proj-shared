@@ -14,7 +14,7 @@ class VideoPrediction:
         self.transformer = Transformer(num_layers, d_model, num_heads, dff, filter_size,
                                        image_shape, pe_input, pe_target, out_channel)
         self.loss_object = nn.MSELoss() if loss_function == 'mse' else nn.BCELoss()
-        self.optimizer   = torch.optim.RMSprop(self.transformer.parameters(), lr=0.001, rho=0.9) \
+        self.optimizer   = torch.optim.RMSprop(self.transformer.parameters(), lr=0.001, alpha=0.9) \
             if optimizer == 'rmsprop' else torch.optim.Adam(self.transformer.parameters())
 
     def loss_function(self, real, pred):
@@ -116,7 +116,7 @@ class VideoPrediction:
         
         for t in range(tar_seq_len):
             prediction, _ = self.transformer(
-                encoder_input, output, False, look_ahead_mask
+                encoder_input, output, look_ahead_mask
             )
                 
             predict = prediction[:, -1:, :, :, :]        
