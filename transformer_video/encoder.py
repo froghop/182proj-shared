@@ -29,10 +29,23 @@ class Encoder(nn.Module):
         seq_len = x.shape[1]
         
         # image embedding and position encoding
-        x = self.embedding(x)
-        x *= torch.sqrt(self.d_model.float32())
-        x += self.pos_encoding[:, :seq_len, :, :, :]
-        
+        # [320, 16, 16, 1]
+        #print(x.shape)
+        #print(x.contiguous().view((x.shape[0]*x.shape[1], *x.shape[2:])).shape)
+        x = self.embedding(x.contiguous().view((x.shape[0]*x.shape[1], *x.shape[2:]))).unsqueeze(dim=0)
+        #print(x.shape)
+        # [5, 128, 16, 16]
+        x *= torch.sqrt(torch.tensor(float(self.d_model), dtype=torch.float32))
+
+        # want [1, 5, 16, 16, 128] [batch size, seq len, im size, im size, d_model]
+        print("self.pos_encoding.shape:", self.pos_encoding.shape)
+        print("x.shape:", x.shape)
+        x += self.pos_encoding[:, :seq_len, :, :x.size(-2), :]
+        #x += self.pos_encoding[:, :seq_len, :, :x.size(-2), :]#self.pos_encoding[:, :seq_len, :, :, :]
+        # 128 is weird
+
+
+
         for layer in range(self.num_layers):
             x = self.enc_layers[layer](x, mask)
 
