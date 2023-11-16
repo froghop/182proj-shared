@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
-
-from .encoder_layer import EncoderLayer
-from .utility import positional_encoding
+from encoder_layer import EncoderLayer
+from utility import positional_encoding
 
 
 class Encoder(nn.Module):

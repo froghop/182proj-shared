@@ -1,10 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from .decoder_layer import \
+from decoder_layer import \
     DecoderLayer  # Ensure DecoderLayer is translated to PyTorch
-from .utility import \
+from utility import \
     positional_encoding  # Ensure this is compatible with PyTorch
 
 

@@ -4,9 +4,8 @@ import time
 import numpy as np
 import torch
 import torch.nn as nn
-
-from .transformer import Transformer
-from .utility import create_look_ahead_mask
+from transformer import Transformer
+from utility import create_look_ahead_mask
 
 
 class VideoPrediction:

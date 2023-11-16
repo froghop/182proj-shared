@@ -1,1 +1,1 @@
-from .video_prediction import VideoPrediction
+from video_prediction import VideoPrediction
