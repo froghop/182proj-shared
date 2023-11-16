@@ -3,55 +3,56 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 import pymunk
+import torch
 from IPython.display import display
 from PIL import Image, ImageDraw, ImageFont
 
 
 class Dataset:
-    
     def __init__(
         self,
-        image_height = 16,
-        image_width = 16,
-        shape_side_length = 2,
-        fps = 60,
-        
-        speed_mean=5,
-        speed_sd=2,
-        gravity_mean=np.pi**2,
-        gravity_sd=0,
-        restitution_min=0.80,
-        restitution_max=1.00,
-        
-        direction_min=0,
-        direction_max=np.pi*2,
-        position_x_mean=None,
-        position_x_sd=1,
-        position_y_mean=None,
-        position_y_sd=1,
+        image_height: int = 32,
+        image_width: int = 32,
+        shape_side_length: int = 2,
+        fps: int = 30,
+        speed_mean: float = 3.0,
+        speed_sd: float = 1.5,
+        gravity_mean: float = 0,
+        # gravity_mean: float = np.pi**2,
+        gravity_sd: float = 0,
+        restitution_min: float = 1.00,
+        restitution_max: float = 1.00,
+        direction_min: float = 0,
+        direction_max: float = np.pi * 2,
+        position_x_mean: float = None,
+        position_x_sd: float = 2,
+        position_y_mean: float = None,
+        position_y_sd: float = 2,
+        mass: float = 1.0,
+        invert_colors=False,
     ):
-        
         self.image_height = image_height
         self.image_width = image_width
         self.shape_side_length = shape_side_length
-        self.fps = fps
-        
+        self.fps = fps  # FPS is essentially our sampling rate, and thus effectively a factor effecting the speed of the object
+
         self.speed_mean = speed_mean
         self.speed_sd = speed_sd
         self.gravity_mean = gravity_mean
         self.gravity_sd = gravity_sd
         self.restitution_min = restitution_min
         self.restitution_max = restitution_max
-        
+
         self.direction_min = direction_min
         self.direction_max = direction_max
-        self.position_x_mean = position_x_mean or image_width/2
+        self.position_x_mean = position_x_mean or image_width / 2
         self.position_x_sd = position_x_sd
-        self.position_y_mean = position_y_mean or image_height/2
+        self.position_y_mean = position_y_mean or image_height / 2
         self.position_y_sd = position_y_sd
-        
-    
-    def simulate_motion(self, initial_pos, velocity, gravity, restitution, time_step):
+        self.mass = mass  # I'm fairly sure this doesn't matter, since we don't incorporate any rotation so momentum doesn't matter
+        self.invert_colors = invert_colors  # perhaps this impacts training?
+
+    def simulate_motion(self, initial_pos, velocity, gravity, restitution):
         """
         Simulates the motion of a square object within a bounded space using Pymunk physics engine.
         The function creates a 2D physics simulation, adds a square body with specified initial properties,
@@ -64,7 +65,6 @@ class Dataset:
                             Positive values pull the square downward.
             restitution (float): The elasticity coefficient of the square and boundaries.
                                 Values are between 0 (perfectly inelastic) and 1 (perfectly elastic).
-            time_step (float): The duration for which the simulation is advanced.
 
         Returns:
             tuple: A tuple containing the new position (x, y) and velocity (vx, vy) of the square after the simulation step.
@@ -75,30 +75,41 @@ class Dataset:
 
         # Create a body and shape for the square
         body = pymunk.Body(
-            1, pymunk.moment_for_box(1, (self.shape_side_length, self.shape_side_length))
+            self.mass,
+            pymunk.moment_for_box(
+                self.mass, (self.shape_side_length, self.shape_side_length)
+            ),
         )
         body.position = pymunk.Vec2d(*initial_pos)  # Unpack the initial_pos tuple
         body.velocity = pymunk.Vec2d(*velocity)  # Unpack the velocity tuple
-        shape = pymunk.Poly.create_box(body, (self.shape_side_length, self.shape_side_length))
+        shape = pymunk.Poly.create_box(
+            body, (self.shape_side_length, self.shape_side_length)
+        )
         shape.elasticity = restitution
         space.add(body, shape)
 
         # Add static lines to form boundaries of the space
-        static_lines = [
-            pymunk.Segment(space.static_body, (0, 0), (0, self.image_height), 1),  # Left
-            pymunk.Segment(
-                space.static_body, (0, self.image_height), (self.image_width, self.image_height), 1
-            ),  # Bottom
-            pymunk.Segment(
-                space.static_body, (self.image_width, self.image_height), (self.image_width, 0), 1
-            ),  # Right
-            pymunk.Segment(space.static_body, (self.image_width, 0), (0, 0), 1),  # Top
-        ]
-        for line in static_lines:
+        left = pymunk.Segment(space.static_body, (0, 0), (0, self.image_height), 1)
+        bottom = pymunk.Segment(
+            space.static_body,
+            (0, self.image_height),
+            (self.image_width, self.image_height),
+            1,
+        )
+        top = pymunk.Segment(space.static_body, (self.image_width, 0), (0, 0), 1)
+        right = pymunk.Segment(
+            space.static_body,
+            (self.image_width, self.image_height),
+            (self.image_width, 0),
+            1,
+        )
+
+        for line in [left, bottom, right, top]:
             line.elasticity = restitution  # Set restitution for the boundaries
             space.add(line)
 
         # Simulate for the given time step
+        time_step = 1.0 / self.fps
         space.step(time_step)
 
         # Return the new position and velocity
@@ -107,23 +118,39 @@ class Dataset:
 
         return new_pos, new_vel
 
-
     def draw_frame(self, position):
         """
         Draw a frame with the shape at the given position in black and white.
         """
-        image = Image.new(
-            "1", (self.image_width, self.image_height), "white"
-        )  # '1' for 1-bit pixels, black and white
+        # '1' for 1-bit pixels, black and white
+        img_color, ball_color = (
+            ("black", "white") if self.invert_colors else ("white", "black")
+        )
+
+        image = Image.new("1", (self.image_width, self.image_height), img_color)
         draw = ImageDraw.Draw(image)
 
-        # Draw the square shape in black|
         x, y = position
+        if self.shape_side_length == 3:
+            # todo genralize this to sizes >= 3 (if we ever end up going this large)
+            draw.rectangle(
+                [
+                    x - 1,
+                    y - 1,
+                    x + self.shape_side_length + 1,
+                    y + self.shape_side_length + 1,
+                ],
+                fill=ball_color,
+            )
+        else:
+            draw.rectangle(
+                [x, y, x + self.shape_side_length, y + self.shape_side_length],
+                fill=ball_color,
+            )
 
-        draw.rectangle([x, y, x + self.shape_side_length, y + self.shape_side_length], fill="black")
-
+        image = np.asarray(image)
+        image = np.expand_dims(image, axis=2)
         return image
-
 
     def generate_sequence(
         self,
@@ -138,22 +165,21 @@ class Dataset:
         """
         Generate a sequence of images of a square object moving in a bounded space.
         """
-        images = []
         position = initial_position
         velocity = (
             initial_speed * np.cos(initial_direction),
             -initial_speed * np.sin(initial_direction),
         )
 
+        images = []
+        positions = []
         for _ in range(sequence_length):
-            for _ in range(self.fps):  # Advance the simulation frame_rate times before generating an image
+            for _ in range(self.fps):
                 position, velocity = self.simulate_motion(
                     position,
                     velocity,
                     gravity,
                     coefficient_of_restitution,
-                    1.0 / self.fps,
-                    # 1.0 / 60,  # Assuming 60 FPS for the simulation
                 )
 
             adjusted_position = (
@@ -162,16 +188,14 @@ class Dataset:
             )
             image = self.draw_frame(adjusted_position)
             images.append(image)
+            positions.append(adjusted_position)
 
-        return images
-
+        images = np.asarray(images)
+        positions = np.asarray(positions)
+        return images, positions
 
     def generate_random_sequence(
-        self,
-        sequence_length,
-        initial_speed, 
-        gravity, 
-        coefficient_of_restitution
+        self, sequence_length, initial_speed, gravity, coefficient_of_restitution
     ):
         """
         Generate a sequence of images of a square object moving in a bounded space with random initial properties.
@@ -180,17 +204,17 @@ class Dataset:
         initial_direction = np.random.uniform(self.direction_min, self.direction_max)
         initial_position_x = np.random.normal(self.position_x_mean, self.position_x_sd)
         initial_position_y = np.random.normal(self.position_y_mean, self.position_y_sd)
-        
+
         initial_position_x = min(max(initial_position_x, 0), self.image_width)
         initial_position_y = min(max(initial_position_y, 0), self.image_height)
-        
+
         if initial_position_x in (0, self.image_width):
-            print('X was out of clipped for being out of bounds')
+            print("X was out of clipped for being out of bounds")
         if initial_position_y in (0, self.image_height):
-            print('Y was out of clipped for being out of bounds')
+            print("Y was out of clipped for being out of bounds")
 
         # Generate the sequence
-        sequence = self.generate_sequence(
+        images, positions = self.generate_sequence(
             sequence_length,
             initial_speed,
             initial_direction,
@@ -199,23 +223,44 @@ class Dataset:
             coefficient_of_restitution,
         )
 
-        return sequence
-    
+        return images, positions
+
     def query(
         self,
-        samples=3,
+        sample_cnt=3,
         sequence_length=10,
+        as_tensor=True,
+        seed=None,
     ):
+        seed = seed or np.random.randint(0, 1000000)
+        np.random.seed(seed)
+
         initial_speed = np.random.normal(self.speed_mean, self.speed_sd)
         gravity = np.random.normal(self.gravity_mean, self.gravity_sd)
-        coefficient_of_restitution = np.random.uniform(self.restitution_min, self.restitution_max)
-        
-        out = []
-        for _ in range(samples):
-            seq = self.generate_random_sequence(sequence_length, initial_speed, gravity, coefficient_of_restitution)
-            out.append(seq)
+        coefficient_of_restitution = np.random.uniform(
+            self.restitution_min, self.restitution_max
+        )
+
+        sample_imgs = []
+        sample_xys = []
+        for _ in range(sample_cnt):
+            images, positions = self.generate_random_sequence(
+                sequence_length, initial_speed, gravity, coefficient_of_restitution
+            )
+            # seq = np.asarray(seq)
+            if as_tensor:
+                images = torch.from_numpy(images)
+
+            sample_imgs.append(images)
+            sample_xys.append(positions)
+
+        out = dict(
+            samples=[sample_imgs, sample_xys],
+            speed=initial_speed,
+            gravity=gravity,
+            restitution=coefficient_of_restitution,
+        )
         return out
-        
 
     def display_sequence(self, sequence):
         # Display the images side by side with boundaries between frames
@@ -233,7 +278,6 @@ class Dataset:
             ax.set_yticks([])  # Remove tick marks
 
         plt.show()
-
 
     def create_question_mark_image(self, image_width, image_height, font_size):
         # Create a new image with white background
