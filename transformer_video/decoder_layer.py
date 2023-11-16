@@ -21,7 +21,7 @@ class DecoderLayer(nn.Module):
         # No dropouts for now
                 
         
-    def forward(self, x, enc_output, training, look_ahead_mask):
+    def forward(self, x, enc_output, look_ahead_mask):
 
         attn1, attn_weights_block1 = self.mha1(x, x, x, look_ahead_mask)
         out1 = self.layernorm1(x + attn1)

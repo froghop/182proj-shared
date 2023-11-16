@@ -17,15 +17,15 @@ class EncoderLayer(nn.Module):
         # No dropouts for now
                 
         
-    def call(self, x, training, mask):
+    def forward(self, x, mask):
         
         attn_output, _ = self.mha(x, x, x, mask)
         # (batch_size, input_seq_len, rows, cols, d_model)
-        out1 = self.layernorm1(x + attn_output, training=training)
+        out1 = self.layernorm1(x + attn_output)
         # (batch_size, input_seq_len, rows, cols, d_model)
         
         ffn_output = self.ffn(out1) # (batch_size, input_seq_len, rows, cols, d_model)
-        out2 = self.layernorm2(out1 + ffn_output, training=training)
+        out2 = self.layernorm2(out1 + ffn_output)
         
         return out2
 

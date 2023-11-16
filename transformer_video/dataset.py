@@ -145,7 +145,7 @@ class Dataset:
             -initial_speed * np.sin(initial_direction),
         )
 
-        for frame in range(sequence_length):
+        for _ in range(sequence_length):
             for _ in range(self.fps):  # Advance the simulation frame_rate times before generating an image
                 position, velocity = self.simulate_motion(
                     position,
@@ -183,8 +183,11 @@ class Dataset:
         
         initial_position_x = min(max(initial_position_x, 0), self.image_width)
         initial_position_y = min(max(initial_position_y, 0), self.image_height)
+        
         if initial_position_x in (0, self.image_width):
-            print('X was out of clipped for being out of bounds; check ')
+            print('X was out of clipped for being out of bounds')
+        if initial_position_y in (0, self.image_height):
+            print('Y was out of clipped for being out of bounds')
 
         # Generate the sequence
         sequence = self.generate_sequence(

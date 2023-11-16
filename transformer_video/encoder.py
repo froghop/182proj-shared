@@ -23,7 +23,7 @@ class Encoder(nn.Module):
         self.enc_layers  = [EncoderLayer(d_model, num_heads, dff, filter_size) for _ in range(num_layers)]
     
 
-    def call(self, x, training, mask):
+    def forward(self, x, mask):
 
         # x.shape = (batch_size, seq_len, rows, cols, depth)
         seq_len = x.shape[1]
@@ -34,6 +34,6 @@ class Encoder(nn.Module):
         x += self.pos_encoding[:, :seq_len, :, :, :]
         
         for layer in range(self.num_layers):
-            x = self.enc_layers[layer](x, training, mask)
+            x = self.enc_layers[layer](x, mask)
 
         return x # (batch_size, seq_len, rows, cols, d_model)

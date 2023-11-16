@@ -28,7 +28,7 @@ class Decoder(nn.Module):
                                          for _ in range(num_layers)])
     
 
-    def forward(self, x, enc_output, training, look_ahead_mask):
+    def forward(self, x, enc_output, look_ahead_mask):
         seq_len = x.size(1)
         attention_weights = {}
 
@@ -37,7 +37,7 @@ class Decoder(nn.Module):
         x = x + self.pos_encoding[:, :seq_len, :, :, :]
 
         for i, layer in enumerate(self.dec_layers):
-            x, block1, block2 = layer(x, enc_output, training, look_ahead_mask)
+            x, block1, block2 = layer(x, enc_output, look_ahead_mask)
             attention_weights[f'decoder_layer{i+1}_block1'] = block1
             attention_weights[f'decoder_layer{i+1}_block2'] = block2
 
