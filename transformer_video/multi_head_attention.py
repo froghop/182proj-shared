@@ -97,23 +97,35 @@ class MultiHeadAttention(nn.Module):
         x = x.view(x.shape[:4] + (self.num_heads, self.depth))
         return x.permute(0, 4, 1, 2, 3, 5)
         
-    def call(self, q, k, v, mask=None):
+    def forward(self, q, k, v, mask=None):
         
         shape_q = q.shape
-        q = self.wq(q) # (batch_size, seq_len_q, rows, cols, depth)
-        k = self.wk(k) # (batch_size, seq_len_k, rows, cols, depth)
-        v = self.wv(v) # (batch_size, seq_len_v, rows, cols, depth)
 
-        q = self.split_heads(q) # (batch_size, num_heads, seq_len_q, rows, cols, depth)
-        k = self.split_heads(k) # (batch_size, num_heads, seq_len_k, rows, cols, depth)
-        v = self.split_heads(v) # (batch_size, num_heads, seq_len_v, rows, cols, depth)
+        print("Original shapes:", q.shape, k.shape, v.shape)
 
+        # Reshape input tensors to [batch_size, num_heads * channels, height, width]
+        q = q.view(shape_q[0], -1, shape_q[-3], shape_q[-2], shape_q[-1])
+        k = k.view(shape_q[0], -1, shape_q[-3], shape_q[-2], shape_q[-1])
+        v = v.view(shape_q[0], -1, shape_q[-3], shape_q[-2], shape_q[-1])
+
+        print("Reshaped shapes:", q.shape, k.shape, v.shape)
+
+        q = self.wq(q)
+        k = self.wk(k)
+        v = self.wv(v)
+
+        print("Convolution output shapes:", q.shape, k.shape, v.shape)
+
+        q = self.split_heads(q)
+        k = self.split_heads(k)
+        v = self.split_heads(v)
 
         scaled_attention, attention_weights = scaled_dot_product_attention(q, k, v, mask)
 
         scaled_attention = scaled_attention.permute(0, 2, 3, 4, 1, 5)
 
-        concat_attention = scaled_attention.view(shape_q)
+        # Reshape to [batch_size, seq_len, rows, cols, num_heads * depth]
+        concat_attention = scaled_attention.view(shape_q[0], shape_q[1], scaled_attention.shape[-3], scaled_attention.shape[-2], self.num_heads * self.depth)
 
         output = self.final_weight(concat_attention)
 
