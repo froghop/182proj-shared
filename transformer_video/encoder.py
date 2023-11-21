@@ -31,7 +31,6 @@ class Encoder(nn.Module):
         # image embedding and position encoding
         # [320, 16, 16, 1]
         #print(x.shape)
-        #print(x.contiguous().view((x.shape[0]*x.shape[1], *x.shape[2:])).shape)
         x = self.embedding(x.contiguous().view((x.shape[0]*x.shape[1], *x.shape[2:]))).unsqueeze(dim=0)
         #print(x.shape)
         # [5, 128, 16, 16]
@@ -40,8 +39,15 @@ class Encoder(nn.Module):
         # want [1, 5, 16, 16, 128] [batch size, seq len, im size, im size, d_model]
         print("self.pos_encoding.shape:", self.pos_encoding.shape)
         print("x.shape:", x.shape)
-        x += self.pos_encoding[:, :seq_len, :, :x.size(-2), :]
-        #x += self.pos_encoding[:, :seq_len, :, :x.size(-2), :]#self.pos_encoding[:, :seq_len, :, :, :]
+        # Repeat the positional encoding for each sequence in the batch
+        pos_encoding = self.pos_encoding.repeat(x.size(0), 1, 1, 1, 1)
+
+        # Slice the positional encoding to match the spatial dimensions of x
+        pos_encoding = pos_encoding[:, :seq_len, :, :, :]
+
+        print("pos_encoding.shape", pos_encoding.shape)
+        x = x + pos_encoding.permute(0, 1, 4, 2, 3)
+
         # 128 is weird
 
 

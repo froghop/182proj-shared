@@ -115,10 +115,13 @@ class VideoPrediction:
         encoder_input = inp[:, :half :, :, :]
         
         for t in range(tar_seq_len):
+            print(f"encoder_input.shape: {encoder_input.shape}")
+            print(f"output.shape: {output.shape}")
+            print(f"look_ahead_mask.shape: {look_ahead_mask.shape}")
             prediction, _ = self.transformer(
                 encoder_input, output, look_ahead_mask
             )
-                
+            print("Prediction shape:", prediction.shape)    
             predict = prediction[:, -1:, :, :, :]        
             output = torch.cat([output, predict], dim=1)
             
