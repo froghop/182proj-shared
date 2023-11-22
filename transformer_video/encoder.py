@@ -48,11 +48,10 @@ class Encoder(nn.Module):
         print("pos_encoding.shape", pos_encoding.shape)
         x = x + pos_encoding.permute(0, 1, 4, 2, 3)
 
-        # 128 is weird
-
 
 
         for layer in range(self.num_layers):
+            print("Layer: ", layer)
             x = self.enc_layers[layer](x, mask)
 
         return x # (batch_size, seq_len, rows, cols, d_model)
