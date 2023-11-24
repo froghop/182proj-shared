@@ -16,6 +16,8 @@ class Transformer(nn.Module):
 
     def forward(self, inp, tar, look_ahead_mask):
         # enc_output.shape = (batch_size, inp_seq_len, rows, cols, d_model)
+        print("Transformer.forward input", inp.shape)
+        # maybe get rid of input row col
         enc_output = self.encoder(inp, None)
 
         # dec_output.shape = (batch_size, tar_seq_len, rows, cols, d_model)

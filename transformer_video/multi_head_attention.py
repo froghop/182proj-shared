@@ -35,7 +35,7 @@ def scaled_dot_product_attention(q, k, v, mask=None):
                 dim=-1
             ),
             dim=-1
-        ) / torch.sqrt(dim_k)
+        ) / torch.sqrt(torch.tensor(dim_k, dtype=torch.float32))
 
 
         if mask is not None:
@@ -76,7 +76,7 @@ class MultiHeadAttention(nn.Module):
 
         self.depth = d_model // num_heads
 
-
+        # expects [batch_size, channels, height, width]
         self.wq = nn.Conv2d(d_model, d_model, filter_size, padding='same')
         self.wk = nn.Conv2d(d_model, d_model, filter_size, padding='same')
         self.wv = nn.Conv2d(d_model, d_model, filter_size, padding='same')
@@ -94,8 +94,10 @@ class MultiHeadAttention(nn.Module):
         x : shape = (batch_size, seq_len, rows, cols, depth)
         """
 
-        x = x.view(x.shape[:4] + (self.num_heads, self.depth))
-        return x.permute(0, 4, 1, 2, 3, 5)
+        # x = x.view(x.shape[:4] + (self.num_heads, self.depth))
+        # return x.permute(0, 4, 1, 2, 3, 5)
+        x = x.view(-1, self.num_heads, x.size(-4), x.size(-3), x.size(-2), x.size(-1)//self.num_heads)
+        return x.permute(0, 2, 3, 4, 1, 5).contiguous()
         
     def forward(self, q, k, v, mask=None):
         
@@ -103,10 +105,10 @@ class MultiHeadAttention(nn.Module):
 
         print("Original shapes:", q.shape, k.shape, v.shape)
 
-        # Reshape input tensors to [batch_size, num_heads * channels, height, width]
-        q = q.view(shape_q[0], -1, shape_q[-3], shape_q[-2], shape_q[-1])
-        k = k.view(shape_q[0], -1, shape_q[-3], shape_q[-2], shape_q[-1])
-        v = v.view(shape_q[0], -1, shape_q[-3], shape_q[-2], shape_q[-1])
+        # Reshape input tensors to [batch_size * num_heads, channels, height, width]
+        q = q.view(-1, shape_q[-3], shape_q[-2], shape_q[-1])
+        k = k.view(-1, shape_q[-3], shape_q[-2], shape_q[-1])
+        v = v.view(-1, shape_q[-3], shape_q[-2], shape_q[-1])
 
         print("Reshaped shapes:", q.shape, k.shape, v.shape)
 
@@ -122,10 +124,14 @@ class MultiHeadAttention(nn.Module):
 
         scaled_attention, attention_weights = scaled_dot_product_attention(q, k, v, mask)
 
-        scaled_attention = scaled_attention.permute(0, 2, 3, 4, 1, 5)
+        # Reshape to [batch_size * num_heads, seq_len, rows, cols, depth]
+        #scaled_attention = scaled_attention.view(-1, scaled_attention.size(-3), scaled_attention.size(-2), scaled_attention.size(-1))
+        scaled_attention = scaled_attention.reshape(shape_q[0], shape_q[1], scaled_attention.size(-3), scaled_attention.size(-2), self.num_heads * self.depth)
+
+        scaled_attention = scaled_attention.permute(0, 4, 1, 2, 3)
 
         # Reshape to [batch_size, seq_len, rows, cols, num_heads * depth]
-        concat_attention = scaled_attention.view(shape_q[0], shape_q[1], scaled_attention.shape[-3], scaled_attention.shape[-2], self.num_heads * self.depth)
+        concat_attention = scaled_attention.view(shape_q[0], -1, scaled_attention.shape[-3], scaled_attention.shape[-2], self.num_heads * self.depth)
 
         output = self.final_weight(concat_attention)
 
