@@ -131,8 +131,8 @@ class MultiHeadAttention(nn.Module):
         scaled_attention = scaled_attention.permute(0, 4, 1, 2, 3)
 
         # Reshape to [batch_size, seq_len, rows, cols, num_heads * depth]
-        concat_attention = scaled_attention.view(shape_q[0], -1, scaled_attention.shape[-3], scaled_attention.shape[-2], self.num_heads * self.depth)
+        concat_attention = scaled_attention.reshape(shape_q[0], -1, scaled_attention.shape[-3], scaled_attention.shape[-2], self.num_heads * self.depth)
 
         output = self.final_weight(concat_attention)
-
+        print("completed MHA")
         return output, attention_weights
